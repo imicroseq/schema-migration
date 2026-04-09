@@ -33,7 +33,7 @@ USER $APP_USER
 # App container
 #######################################################
 
-FROM node:slim as runtime
+FROM node:22-slim as runtime
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
 ARG APP_FOLDER
