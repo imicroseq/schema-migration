@@ -23,7 +23,8 @@ import { CS_NAME } from './constants';
 
 /*
  * Version 21 to 22 Transform
- * - No Changes
+ * Added "samples" as required field on the root of the consensus sequence document. 
+ * This is an array of objects, each of which requires a donor and a specimen.
  */
 
 export default defineTransform({ start: { name: CS_NAME, version: 21 }, end: { name: CS_NAME, version: 22 } }, success);
