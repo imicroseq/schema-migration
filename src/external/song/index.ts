@@ -104,7 +104,6 @@ function createSongClient(config: SongConfigOptions) {
 			'publishedAt',
 			'analysisStateHistory',
 			'files',
-			'samples',
 		]);
 
 		const fetchResult = await withTimeout(5000, egoClient.fetchWithAuth)(updateUrl, {
