@@ -37,7 +37,6 @@ const FileData = zod
 	.object({
 		studyId: zod.string(),
 		objectId: zod.string(),
-		analysisId: zod.string(),
 
 		dataType: zod.string(),
 		fileName: zod.string(),
@@ -51,7 +50,6 @@ export type FileData = zod.infer<typeof FileData>;
 
 const Specimen = zod.object({
 	specimenId: zod.string(),
-	donorId: zod.string(),
 	submitterSpecimenId: zod.string(),
 	tumourNormalDesignation: zod.string(),
 	specimenTissueSource: zod.string(),
@@ -61,7 +59,6 @@ export type Specimen = zod.infer<typeof Specimen>;
 
 const Donor = zod.object({
 	donorId: zod.string(),
-	studyId: zod.string(),
 	gender: zod.string(),
 	submitterDonorId: zod.string(),
 });
@@ -69,7 +66,6 @@ export type Donor = zod.infer<typeof Donor>;
 
 const Sample = zod.object({
 	sampleId: zod.string(),
-	specimenId: zod.string(),
 	submitterSampleId: zod.string(),
 	matchedNormalSubmitterSampleId: zod.string().nullable(),
 	sampleType: zod.string(),
