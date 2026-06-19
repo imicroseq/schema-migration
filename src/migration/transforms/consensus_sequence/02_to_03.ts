@@ -26,48 +26,27 @@ import { defineTransform } from '../../transform';
 import { CS_NAME } from './constants';
 
 /*
- * Version 12 to 13 Transform
- * - experiment.purpose_of_sequencing becomes an array
- * - sample_collection.anatomical_part becomes an array
+ * Version 2 to 3 Transform
+ * - Passthrough: schema v2→v3 removed duplicate `required` entries and added `samples`
+ *   to the explicit properties list. The analysis data itself is unchanged.
  */
-
-const stringOrArray = zod.union([zod.string(), zod.array(zod.string())]);
 
 const InputSchema = zod.object({
 	analysisType: zod.object({
 		name: zod.literal(CS_NAME),
-		version: zod.literal(12),
-	}),
-	experiment: zod.object({
-		purpose_of_sequencing: stringOrArray,
-	}),
-	sample_collection: zod.object({
-		anatomical_part: stringOrArray,
+		version: zod.literal(2),
 	}),
 });
 type InputSchema = zod.infer<typeof InputSchema>;
 
 const matchesInputSchema = (input: Analysis): input is Analysis & InputSchema => InputSchema.safeParse(input).success;
 
-const toArray = (value: string | string[]): string[] => (Array.isArray(value) ? value : [value]);
-
 const transform = (analysis: Analysis): Result<Analysis> => {
 	if (!matchesInputSchema(analysis)) {
-		return failure('Provided analysis does not match the version 12 schema and cannot be migrated to version 13');
+		return failure('Provided analysis does not match the version 2 schema and cannot be migrated to version 3');
 	}
 
-	return success(
-		Object.assign(_.cloneDeep(analysis), {
-			sample_collection: {
-				...analysis.sample_collection,
-				anatomical_part: toArray(analysis.sample_collection.anatomical_part),
-			},
-			experiment: { ...analysis.experiment, purpose_of_sequencing: toArray(analysis.experiment.purpose_of_sequencing) },
-		}),
-	);
+	return success(_.cloneDeep(analysis));
 };
 
-export default defineTransform(
-	{ start: { name: CS_NAME, version: 12 }, end: { name: CS_NAME, version: 13 } },
-	transform,
-);
+export default defineTransform({ start: { name: CS_NAME, version: 2 }, end: { name: CS_NAME, version: 3 } }, transform);

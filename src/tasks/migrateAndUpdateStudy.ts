@@ -21,6 +21,8 @@ import { AnalysisFilters, SongClient } from '../external/song';
 import { Analysis, PagedAnalysisResponse } from '../external/song/types';
 import { asyncPipe, pipe } from '../structures/pipe';
 import consensusSequenceMigrationChain from '../migration/transforms/consensus_sequence';
+import { TransformChain } from '../migration/transform';
+import { CS_NAME } from '../migration/transforms/consensus_sequence/constants';
 
 import { withResultAsync } from '../types/result';
 import migrateAnalyses from './migrateAnalyses';
@@ -51,7 +53,7 @@ type MigrationSummary = {
  * @returns function to migrate all analyses in a study using the provided song client
  */
 const migrateAndUpdateStudy =
-	(songClient: SongClient) =>
+	(songClient: SongClient, latestSchemaVersion: number | undefined) =>
 	async (study: string): Promise<MigrationSummary> => {
 		/* ===== State Setup and Summary object ===== */
 		const filters: AnalysisFilters = {
@@ -71,14 +73,27 @@ const migrateAndUpdateStudy =
 			},
 		};
 
-		let totalAnalyses = 1; // start total at 1 to ensure we make at least one page request, this will get updated on every page result
+		let totalAnalyses = 0;
 		let nextOffset = 0;
 		const pageSize = config.song.pageSize;
+
+		/* ===== Determine active chain (capped at SONG's highest registered schema version) ===== */
+		let activeChain: TransformChain = consensusSequenceMigrationChain;
+		if (latestSchemaVersion !== undefined) {
+			const limitedChainResult = consensusSequenceMigrationChain.to({ name: CS_NAME, version: latestSchemaVersion });
+			if (limitedChainResult.success) {
+				activeChain = limitedChainResult.data;
+			} else {
+				logger.warn(`Could not limit chain to SONG schema version ${latestSchemaVersion}, using full chain`, ...limitedChainResult.errors);
+			}
+		}
 
 		/* ===== Functions to Help Update Each page of Analyses ===== */
 		const filterSkippedAnalyses = (analyses: Analysis[]): Analysis[] => {
 			const filtered = analyses.filter(
-				(analysis) => analysis.analysisType.version < consensusSequenceMigrationChain.getEnd().version,
+				(analysis) =>
+					analysis.analysisType.version >= activeChain.getStart().version &&
+					analysis.analysisType.version < activeChain.getEnd().version,
 			);
 			const skipped = analyses.length - filtered.length;
 			summary.counts.skipped += skipped;
@@ -88,7 +103,7 @@ const migrateAndUpdateStudy =
 
 		const applyMigrationsToPage = pipe((page: PagedAnalysisResponse) => page.analyses)
 			.into(filterSkippedAnalyses)
-			.into(migrateAnalyses)
+			.into(migrateAnalyses(activeChain))
 			.build();
 
 		const oneTimeLogger = once((page: PagedAnalysisResponse) => {
@@ -118,8 +133,8 @@ const migrateAndUpdateStudy =
 		const sendAnalysisUpdate = limitConcurrency(config.song.maxConcurrent, withResultAsync(songClient.updateAnalysis));
 
 		/* ===== The Actual Work ===== */
-		// This while loop fetches pages of analyses and migrates them all, until there are no more analyses left in the study
-		while (nextOffset < totalAnalyses) {
+		// Fetch pages of analyses and migrate them until there are no more left in the study
+		do {
 			/**
 			 * 1. Fetch a page of analyses
 			 * 2. Apply migrations to all analyses in that page
@@ -140,6 +155,11 @@ const migrateAndUpdateStudy =
 				if (result.success) {
 					summary.counts.successful++;
 					summary.counts.processed++;
+					logger.info(
+						`Analysis ${summary.counts.processed} of ${summary.counts.total}`,
+						result.data.studyId,
+						result.data.analysisId,
+					);
 				} else {
 					summary.counts.error++;
 					summary.counts.processed++;
@@ -149,7 +169,7 @@ const migrateAndUpdateStudy =
 
 			//log progress
 			logger.info('Progress', summary);
-		} // end of while loop
+		} while (nextOffset < totalAnalyses);
 
 		// Return summary as complete.
 		return { ...summary, completed: true };

@@ -18,6 +18,7 @@
  */
 
 import { createTransformChain } from '../../transform';
+import cs2to3 from './02_to_03';
 import cs3to4 from './03_to_04';
 import cs4to5 from './04_to_05';
 import cs5to6 from './05_to_06';
@@ -39,6 +40,7 @@ import cs20to21 from './20_to_21';
 import cs21to22 from './21_to_22';
 
 const migrationChain = createTransformChain(
+	cs2to3,
 	cs3to4,
 	cs4to5,
 	cs5to6,

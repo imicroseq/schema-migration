@@ -32,6 +32,10 @@ import { Headers } from 'node-fetch';
 import _ from 'lodash';
 import { pipeLog } from '../../utils/pipeUtils';
 
+const SchemaListResponse = zod.object({
+	resultSet: zod.array(zod.object({ version: zod.number() })),
+});
+
 type SongConfigOptions = {
 	host: string;
 	name?: string;
@@ -51,6 +55,18 @@ export type AnalysisFilters = {
 function createSongClient(config: SongConfigOptions) {
 	const logger = Logger(...filterUndefined('SongClient', config.name));
 	let egoClient = config.ego ? createEgoClient(config.ego) : undefined;
+
+	/* ===== SCHEMA FETCHING ===== */
+	const getLatestSchemaVersion = async (typeName: string): Promise<Result<number>> => {
+		const url = urlJoin(config.host, `schemas?name=${typeName}&hideSnapshot=true`);
+		const result = await asyncPipe(withTimeout(10000, safeJsonFetcher)(url))
+			.into(SchemaListResponse.parse)
+			.run();
+		if (!result.success) return result;
+		const versions = result.data.resultSet.map((s) => s.version);
+		if (versions.length === 0) return failure(`No schemas found in SONG for analysisType '${typeName}'`);
+		return success(Math.max(...versions));
+	};
 
 	/* ===== STUDY FETCHING ===== */
 	const listStudies = async (): Promise<Result<string[]>> => {
@@ -118,7 +134,7 @@ function createSongClient(config: SongConfigOptions) {
 			// Handle the Update Response:
 			// return the original analysis OR parse the error responseto detail the failure error message
 			if (response.ok) {
-				logger.debug(`Analysis update successuful`, analysis.studyId, analysis.analysisId);
+				logger.debug(`Analysis update successful`, analysis.studyId, analysis.analysisId);
 				return success(analysis);
 			}
 			try {
@@ -165,6 +181,7 @@ function createSongClient(config: SongConfigOptions) {
 
 	return {
 		getAnalysesPage,
+		getLatestSchemaVersion,
 		listStudies,
 		updateAnalysis,
 	};

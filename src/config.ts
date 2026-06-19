@@ -32,11 +32,6 @@ type Secrets = {
 		secret: string;
 	};
 };
-/*
-credentials: {
-    id: process.env.EGO_CLIENT_ID || '',
-    secret: process.env.EGO_CLIENT_SECRET || '',
-  },*/
 let secrets: Secrets | undefined = undefined;
 
 const loadVaultSecrets = async () => {
@@ -84,9 +79,6 @@ const config = {
 		name: process.env.SONG_ENV,
 		pageSize: Number(process.env.SONG_PAGE_SIZE) || 100,
 		maxConcurrent: Number(process.env.SONG_CONCURRENT_REQUESTS) || 5,
-	},
-	migration: {
-		use14: process.env.MIGRATION_CHAIN === 'prod' ? false : true, // do not use migration 13to14 in prod, only needed in dev.
 	},
 };
 export default config;

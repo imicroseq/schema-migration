@@ -18,7 +18,8 @@
  */
 
 import config, { getSecrets } from './config';
-import createSongClient, { AnalysisFilters } from './external/song';
+import createSongClient from './external/song';
+import { CS_NAME } from './migration/transforms/consensus_sequence/constants';
 import Logger, { LogLevel } from './logger';
 import limitConcurrency from './structures/limitConcurrency';
 import { asyncPipe } from './structures/pipe';
@@ -48,7 +49,19 @@ const run = async () => {
 		logger.info(`Beginning Migration Script`);
 		logger.info(`Song`, config.song.host);
 		logger.info(`Ego`, config.ego.host);
-		logger.info(`Migration Version`, config.migration.use14 ? 14 : 13);
+
+		/* Determine the highest schema version registered in SONG once, before the study loop,
+		 * so we don't query per-study and so chain-capping decisions are logged once at startup. */
+		const latestVersionResult = await songClient.getLatestSchemaVersion(CS_NAME);
+		const latestSchemaVersion = latestVersionResult.success ? latestVersionResult.data : undefined;
+		if (!latestVersionResult.success) {
+			logger.warn(
+				`Could not determine latest ${CS_NAME} schema version in SONG — full chain will be used`,
+				...latestVersionResult.errors,
+			);
+		} else {
+			logger.info(`Latest ${CS_NAME} schema version in SONG: ${latestSchemaVersion}`);
+		}
 
 		/**
 		 * 1. Get all studies
@@ -57,11 +70,9 @@ const run = async () => {
 		 * 3. Log results and check for completion.
 		 */
 
-		const limitedMigrateStudy = limitConcurrency(1, migrateAndUpdateStudy(songClient));
+		const limitedMigrateStudy = limitConcurrency(1, migrateAndUpdateStudy(songClient, latestSchemaVersion));
 
 		const summary = await asyncPipe(getAvailableStudies(songClient))
-			// .into(pipeLog(logger, LogLevel.DEBUG, 'Available Studies'))
-			// .into((studies) => (studyFilter.length ? studies.filter((study) => studyFilter.includes(study)) : studies))
 			.into(pipeLog(logger, LogLevel.DEBUG, 'Studies to Migrate'))
 			.await(mapAsync(limitedMigrateStudy))
 			.into(pipeLog(logger, LogLevel.INFO, 'Summary'))

@@ -18,23 +18,20 @@
  */
 
 import { Analysis } from '../external/song/types';
-import consensusSequenceMigrationChain from '../migration/transforms/consensus_sequence';
+import { TransformChain } from '../migration/transform';
 import { pipe } from '../structures/pipe';
 import { Result } from '../types';
 import { asResult } from '../types/result';
 
-/**
- * Apply all migrations in the consensus_sequence schema migration chain to an analyses
- * @param analyses
- * @returns the migrated analysis.
- */
-const migrateAnalyses = (analyses: Analysis[]): Result<Result<Analysis>[]> =>
-	asResult(
-		analyses.map((analysis) =>
-			pipe((_: void) => consensusSequenceMigrationChain.from(analysis.analysisType))
-				.into((chain) => chain.apply(analysis))
-				.run(),
-		),
-	);
+const migrateAnalyses =
+	(chain: TransformChain) =>
+	(analyses: Analysis[]): Result<Result<Analysis>[]> =>
+		asResult(
+			analyses.map((analysis) =>
+				pipe((_: void) => chain.from(analysis.analysisType))
+					.into((sliced) => sliced.apply(analysis))
+					.run(),
+			),
+		);
 
 export default migrateAnalyses;
